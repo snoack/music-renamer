@@ -134,11 +134,17 @@ sub typefound_callback
 	Glib::Idle -> add(\&idle_exit_loop);
 }
 
+sub newpad_callback
+{
+	my ($decoder, $pad, $last, $sink) = @_;
+	$pad->link($sink->get_pad("sink"));
+}
+
 sub my_bus_callback
 {
 	my ($bus, $message, $tags) = @_;
 
-	if ($message->type & "error" || $message->type & "eos" || $message->type & "async-done")
+	if ($message->type & "error" || $message->type & "eos")
 	{
 		$loop->quit();
 	}
@@ -235,14 +241,18 @@ sub read_tags
 	my ($filesrc) = @_;
 	my $tags;
 
-	my $decodebin = GStreamer::ElementFactory->make(decodebin => "decoder");
-
 	$cur_pipeline = GStreamer::Pipeline->new("pipeline_read_tags");
-	$cur_pipeline->get_bus()->add_watch(\&my_bus_callback, \$tags);
-	$cur_pipeline->add($filesrc, $decodebin);
-	$filesrc->link($decodebin);
+	my ($decoder, $sink) = GStreamer::ElementFactory->make(
+		decodebin => "decoder",
+		fakesink => "fakesink");
 
-	my $result =  $cur_pipeline->set_state("paused");
+	$cur_pipeline->add($filesrc, $decoder, $sink);
+	$filesrc->link($decoder);
+	$decoder->signal_connect(new_decoded_pad => \&newpad_callback, $sink);
+
+	$cur_pipeline->get_bus()->add_watch(\&my_bus_callback, \$tags);
+
+	my $result =  $cur_pipeline->set_state("playing");
 	if ($result eq "async")
 	{
 		($result, undef, undef) =
@@ -250,7 +260,7 @@ sub read_tags
 	}
 
 	$loop->run() if ($result eq "success");
-
+	
 	$cur_pipeline->set_state("null");
 	$cur_pipeline = undef;
 
@@ -293,11 +303,11 @@ sub rename_file_on_tags
 	{
 		$ext = "ogg";
 	}
-	elsif ($type eq "application/x-id3")
+	elsif ($audio_codec eq "MPEG 1 Audio, Layer 3 (MP3)")
 	{
 		$ext = "mp3";
 	}
-	elsif ($type eq "application/x-apetag")
+	elsif ($audio_codec eq "Musepack")
 	{
 		$ext = "mpc";
 	}
