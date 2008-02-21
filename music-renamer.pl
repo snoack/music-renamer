@@ -305,7 +305,7 @@ sub rename_file_on_tags
 	{
 		$ext = "m4a";
 	}
-	elsif (substr($audio_codec, 0, 19) eq "Windows Media Audio")
+	elsif (substr($audio_codec, 0, 3) eq "WMA")
 	{
 		$ext = "wma";
 	}
