@@ -308,10 +308,19 @@ sub rename_file_on_tags
 	}
 
 	my $audio_codec = $tags->{'audio-codec'}[0];
+	print 
 	my $ext;
 	if ($type eq "application/ogg")
 	{
 		$ext = "ogg";
+	}
+	if ($type eq "audio/x-flac")
+	{
+		$ext = "flac";
+	}
+	elsif ($type eq "audio/x-m4a")
+	{
+		$ext = "m4a";
 	}
 	elsif ($audio_codec eq "MPEG 1 Audio, Layer 3 (MP3)")
 	{
@@ -320,10 +329,6 @@ sub rename_file_on_tags
 	elsif ($audio_codec eq "Musepack")
 	{
 		$ext = "mpc";
-	}
-	elsif ($type eq "audio/x-m4a")
-	{
-		$ext = "m4a";
 	}
 	elsif (substr($audio_codec, 0, 3) eq "WMA")
 	{
