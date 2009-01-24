@@ -20,6 +20,80 @@ import re
 
 import tagpy
 
+try:
+	import mutagen.asf
+except ImportError:
+	pass
+else:
+	# Cast function to convert date strings from the tags to an integer
+	# representing the year.
+	year_to_int = lambda x: int(x.split(u'-', 1)[0])
+
+	# Adapts the interface of tagpy's Tag object to mutagen's FileType object.
+	class MutagenTagAdapter(object):
+		def __init__(self, file, mapping):
+			self._file = file
+			self._mapping = mapping
+
+		def __getattr__(self, name):
+			try:
+				type_cast, alias = self._mapping[name]
+			except KeyError:
+				raise AttributeError
+			else:
+				value = self._file.get(alias, u'')
+				while not isinstance(value, unicode):
+					if isinstance(value, (list, tuple)):
+						value = value[0]
+					else:
+						value = unicode(value)
+
+				try:
+					return type_cast(value)
+				except Exception:
+					return None
+
+		def isEmpty(self):
+			for key in self._mapping.iterkeys():
+				if getattr(self, key):
+					return False
+			return True
+
+	# Implements tagpy's File object interface, for reading asf tags using mutagen.
+	class AsfFile(object):
+		def __init__(self, filename):
+			self._file = mutagen.asf.Open(filename)
+
+		def tag(self):
+			return MutagenTagAdapter(self._file, {
+				'album':  (unicode,     'WM/AlbumTitle'),
+				'artist': (unicode,     'Author'),
+				'title':  (unicode,     'Title'),
+				'track':  (int,         'WM/TrackNumber'),
+				'year':   (year_to_int, 'WM/Year'),
+			})
+
+	# Resolves file extensions that can't be handled by tagpy but by mutagen (at
+	# the moment only wma).
+	class MutagenResolver(tagpy.FileTypeResolver):
+		def __init__(self):
+			self._default_extensions = tagpy.FileRef._getExtToModule().keys()
+
+		def createFile(self, filename, *args, **kwargs):
+			ext = os.path.splitext(filename)[1][len(os.path.extsep):].lower()
+			# If the extension is supported by the installed version of tagpy,
+			# return None and let tagpy do the work, because of tagpy is known
+			# to be faster than mutagen since it is written in C.
+			if ext in self._default_extensions:
+				return None
+
+			# If the extension is supported by the mutagen bridge, return the
+			# corresponding File object.
+			if ext == 'wma':
+				return AsfFile(filename)
+
+	tagpy.FileRef.addFileTypeResolver(MutagenResolver())
+
 def _default_format(vars):
 	for tag in ('artist', 'album', 'title'):
 		if not vars[tag]:
